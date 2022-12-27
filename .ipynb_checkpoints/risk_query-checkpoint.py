@@ -115,27 +115,57 @@ class RiskInfer(object):
 		self.net.load_state_dict(ckpt)
 		self.net.eval()
 
-	def predict(self, text):
+	def reload(self, model_path):
+        ckpt = torch.load(model_path, map_location=self.device)
+        self.net.load_state_dict(ckpt)
+        self.net.eval()
 
-		"""抽取输入text所包含的类型
-		"""
-		encoder_txt = self.tokenizer.encode_plus(text, max_length=256)
-		input_ids = torch.tensor(encoder_txt["input_ids"]).long().unsqueeze(0).to(self.device)
-		token_type_ids = torch.tensor(encoder_txt["token_type_ids"]).unsqueeze(0).to(self.device)
-		attention_mask = torch.tensor(encoder_txt["attention_mask"]).unsqueeze(0).to(self.device)
-		
-		scores_dict = {}
-		with torch.no_grad():
-			[logits_list, 
-			hidden_states] = self.net(input_ids, 
-				attention_mask, token_type_ids, transformer_mode='cls')
-		for schema_type, logits in zip(list(self.schema_dict.keys()), logits_list):
-			scores = torch.nn.Softmax(dim=1)(logits)[0].data.cpu().numpy()
-			scores_dict[schema_type] = []
-			for index, score in enumerate(scores):
-				scores_dict[schema_type].append([self.schema_dict[schema_type]['id2label'][index], 
-										float(score)])
-		return scores_dict
+    def predict(self, text):
+
+        """抽取输入text所包含的类型
+        """
+        encoder_txt = self.tokenizer.encode_plus(text, max_length=256)
+        input_ids = torch.tensor(encoder_txt["input_ids"]).long().unsqueeze(0).to(self.device)
+        token_type_ids = torch.tensor(encoder_txt["token_type_ids"]).unsqueeze(0).to(self.device)
+        attention_mask = torch.tensor(encoder_txt["attention_mask"]).unsqueeze(0).to(self.device)
+        
+        scores_dict = {}
+        with torch.no_grad():
+            [logits_list, 
+            hidden_states] = self.net(input_ids, 
+                attention_mask, token_type_ids, transformer_mode='cls')
+        for schema_type, logits in zip(list(self.schema_dict.keys()), logits_list):
+            scores = torch.nn.Softmax(dim=1)(logits)[0].data.cpu().numpy()
+            scores_dict[schema_type] = []
+            for index, score in enumerate(scores):
+                scores_dict[schema_type].append([self.schema_dict[schema_type]['id2label'][index], 
+                                        float(score)])
+        return scores_dict
+    
+    def predict_batch(self, text):
+        if isinstance(text, list):
+            text_list = text
+        else:
+            text_list = [text]
+        model_input = self.tokenizer(text_list, return_tensors="pt",padding=True)
+        for key in model_input:
+            model_input[key] = model_input[key].to(self.device)
+        with torch.no_grad():
+            [logits_list, 
+            hidden_states] = self.net(model_input['input_ids'], 
+                model_input['attention_mask'], 
+                model_input['token_type_ids'], transformer_mode='cls')
+        score_dict_list = []
+        for idx, text in enumerate(text_list):
+            scores_dict = {}
+            for schema_type, logits in zip(list(self.schema_dict.keys()), logits_list):
+                scores = torch.nn.Softmax(dim=1)(logits)[idx].data.cpu().numpy()
+                scores_dict[schema_type] = []
+                for index, score in enumerate(scores):
+                    scores_dict[schema_type].append([self.schema_dict[schema_type]['id2label'][index], 
+                                            float(score)])
+            score_dict_list.append(scores_dict)
+        return score_dict_list
 
 risk_api = RiskInfer('./risk_data/config.ini')
 

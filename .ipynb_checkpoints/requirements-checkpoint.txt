@@ -1,0 +1,4 @@
+transformers>=4.18.0
+roformer>=0.4.3
+addict
+configparser

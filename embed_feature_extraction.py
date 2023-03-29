@@ -4,6 +4,11 @@ import torch
 import numpy as np
 from roformer import RoFormerForCausalLM, RoFormerConfig
 from transformers import BertTokenizer
+from tqdm import tqdm
+import hnswlib
+import numpy as np
+import pickle
+import json
 
 """
 # 可选以下几个。
@@ -118,4 +123,85 @@ class Paraphrase(object):
             Z = outputs.pooler_output.cpu().numpy()
         Z /= (Z**2).sum(axis=1, keepdims=True)**0.5
         return [(text, feat) for text, feat in zip(text_list, Z)]
-            
+    
+    def build_index(self, input_path, output_path):
+        print(input_path, '==input-path==')
+        print(output_path+'/feat.json', '==output-path==')
+        
+        with open(output_path+'/feat.json', 'w') as fwobj:
+            with open(input_path) as frobj:
+                queue = []
+                t = []
+                feat_idx = []
+                feat_matrix = []
+
+                for idx, line in tqdm(enumerate(frobj)):
+                    content = json.loads(line.strip())
+                    queue.append(content['text'])
+                    t.append(content)
+                    feat_idx.append(idx)
+
+                    if np.mod(len(queue), 32) == 0 and queue:
+                        s = self.get_embedding(queue)
+                        for result, tt in zip(s, t):
+                            tt['feat'] = result[1].tolist()
+                            fwobj.write(json.dumps(tt, ensure_ascii=False)+'\n')
+                            feat_matrix.append(result[1].tolist())
+                        queue = []
+                        t = []
+                if queue:
+                    s = self.get_embedding(queue)
+                    for result, tt in zip(s, t):
+                        tt['feat'] = result[1].tolist()
+                        fwobj.write(json.dumps(tt, ensure_ascii=False)+'\n')
+                        feat_matrix.append(result[1].tolist())
+                    queue = []
+                    t = []
+        
+        dim = self.model_config.hidden_size
+        
+        ids = np.array(feat_idx)
+        feats = np.array(feat_matrix)
+
+        # Declaring index
+        self.p = hnswlib.Index(space = 'ip', dim = dim) # possible options are l2, cosine or ip
+
+        self.p.init_index(max_elements=10000000, ef_construction=10, M=16)
+
+        self.p.set_num_threads(4)
+
+        print("Adding first batch of %d elements" % (feats.shape[0]))
+        self.p.add_items(feats, ids, num_threads=4)
+        
+        self.p.save_index(output_path+'/knn.bin')
+        
+    def load_knn(self, output_path):
+        dim = self.model_config.hidden_size
+        self.p = hnswlib.Index(space = 'ip', dim = dim) # possible options are l2, cosine or ip
+        self.p.load_index(output_path+'/knn.bin', 
+             max_elements=10000000)
+        
+        with open(output_path+'/feat.json', 'r') as frobj:
+            self.meta = {}
+            for idx, line in tqdm(enumerate(frobj)):
+                content = json.loads(line.strip())
+                _del = content.pop('feat')
+                self.meta[idx] = content
+        
+    def get_knn(self, text, topk=10):
+        resp_list = self.get_embedding(text)
+        result_list = []
+        for resp in resp_list:
+            labels, distances = self.p.knn_query(resp[1], k = 10)
+            distances = (1.0 - distances).tolist()
+            output_list = []
+            for label, dist in zip(labels.tolist()[0], distances[0]):
+                output_list.append({
+                    'label':label,
+                    'distance':dist,
+                    'info':self.meta[label]
+                })
+                
+            result_list.append(output_list)
+        return result_list
+

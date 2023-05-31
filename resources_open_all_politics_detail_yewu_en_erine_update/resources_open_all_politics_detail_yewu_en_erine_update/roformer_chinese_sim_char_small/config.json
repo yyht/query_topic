@@ -1,0 +1,31 @@
+{
+  "_name_or_path": "junnyu/roformer_chinese_sim_char_small",
+  "architectures": [
+    "RoFormerForCausalLM"
+  ],
+  "attention_probs_dropout_prob": 0.1,
+  "directionality": "bidi",
+  "embedding_size": 384,
+  "eos_token_id": 102,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 384,
+  "initializer_range": 0.02,
+  "intermediate_size": 1536,
+  "is_decoder": true,
+  "layer_norm_eps": 1e-12,
+  "max_position_embeddings": 512,
+  "model_type": "roformer",
+  "norm_type": "layer_norm",
+  "num_attention_heads": 6,
+  "num_hidden_layers": 6,
+  "pad_token_id": 0,
+  "pooler_activation": "linear",
+  "rotary_value": false,
+  "torch_dtype": "float32",
+  "transformers_version": "4.18.0",
+  "type_vocab_size": 2,
+  "use_bias": true,
+  "use_cache": true,
+  "vocab_size": 12000
+}

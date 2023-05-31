@@ -1,0 +1,13 @@
+[
+    {
+        "name": "白名单",
+        "pos_regex_list": [
+            "你这么说我会难过的|别这么说嘛我会难过的|我可不傻,我可聪明着呢|我们聊点别的吧|换个问题吧"
+        ],
+        "neg_regex_list": [],
+        "reform_query": "",
+        "response": [
+        ],
+        "append_knowledge": null
+    }
+]
